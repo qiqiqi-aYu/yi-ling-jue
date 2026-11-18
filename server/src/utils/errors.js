@@ -33,6 +33,7 @@ const fail = {
   matchFinished: () => new AppError(ERROR_CODE.MATCH_FINISHED, '对局已结束'),
   version: () => new AppError(ERROR_CODE.VERSION_CONFLICT, '版本号冲突，请重新拉取状态'),
   level: () => new AppError(ERROR_CODE.LEVEL_LIMIT, '等级已满或经验不足'),
+  levelMax: (maxLevel) => new AppError(ERROR_CODE.LEVEL_LIMIT, `已达等级上限 ${maxLevel} 级`),
   combine: () => new AppError(ERROR_CODE.COMBINE_FAILED, '同名同星棋子不足 3 个'),
   config: (message) => new AppError(ERROR_CODE.CONFIG_INVALID, message),
   auth: () => new AppError(ERROR_CODE.UNAUTHORIZED, '未登录或 token 已失效'),

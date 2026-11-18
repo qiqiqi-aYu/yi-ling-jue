@@ -8,6 +8,7 @@
 const crypto = require('crypto');
 const { createMatchCardPool } = require('../config/balance.loader');
 const { calcRoundIncome } = require('../engine/economy');
+const { levelState, canBuyExp } = require('../engine/level');
 const { assignRanks } = require('../engine/damage');
 const { streaksOf } = require('./support');
 const { fail } = require('../utils/errors');
@@ -94,7 +95,14 @@ function createMatchService(ctx) {
         { goldBefore: me.gold, ...streaksOf(me.win_streak) },
         balance.engine.economyConfig,
       );
-      const level = balance.levels.list.find((row) => Number(row.level) === Number(me.level));
+      const levelRow = balance.levels.list.find((row) => Number(row.level) === Number(me.level));
+      // 等级态（所需经验 / 人口上限 / 经验条百分比）与「能否买经验」一律由内核算好，
+      // 接口只输出结论，前端不参与任何金币与经验的比较。
+      const levelView = levelState(Number(me.level), Number(me.exp), balance.engine.levelConfig);
+      const buyExpState = canBuyExp(
+        { level: levelView.level, gold: Number(me.gold) },
+        balance.engine.levelConfig,
+      );
       return {
         matchId: match.id,
         seed: match.seed,
@@ -105,10 +113,17 @@ function createMatchService(ctx) {
           playerIndex: 0,
           hp: me.hp,
           gold: me.gold,
-          level: me.level,
-          exp: me.exp,
+          level: levelView.level,
+          exp: levelView.exp,
+          nextExp: levelView.nextExp,
+          expPercent: levelView.expPercent,
+          maxUnit: levelView.maxUnit,
+          // 兼容旧前端字段：人口上限与 maxUnit 同源
+          maxBoardSlots: levelRow ? levelRow.maxBoardSlots : levelView.maxUnit,
+          canBuyExp: buyExpState.allowed,
+          buyExpBlockedReason: buyExpState.reason,
+          buyExpBlockedMessage: buyExpState.message,
           winStreak: me.win_streak,
-          maxBoardSlots: level ? level.maxBoardSlots : me.level,
           board: me.board,
           bench: me.bench,
         },

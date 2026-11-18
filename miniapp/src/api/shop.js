@@ -40,6 +40,16 @@ export function levelUp(matchId, count = 1, { version } = {}) {
   return post(`/matches/${matchId}/level-up`, data);
 }
 
+/**
+ * POST /matches/:id/buy-exp
+ * 消耗与获得量由后端配置决定，前端只发请求、不传金币与经验数值。
+ */
+export function buyExp(matchId, { version } = {}) {
+  const data = {};
+  if (version !== undefined) data.version = version;
+  return post(`/matches/${matchId}/buy-exp`, data);
+}
+
 /** GET /matches/:id/economy */
 export function getEconomy(matchId) {
   return get(`/matches/${matchId}/economy`);

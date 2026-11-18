@@ -26,6 +26,7 @@ function createBoardService(ctx) {
         board: player.board,
         bench: player.bench,
         maxBoardSlots: level ? level.maxBoardSlots : player.level,
+        maxUnit: level ? level.maxBoardSlots : player.level,
         boardRows: BOARD_ROWS,
         boardCols: BOARD_COLS,
       };

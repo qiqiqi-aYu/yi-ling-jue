@@ -10,6 +10,9 @@
 
 const { drawShop, adjustPool } = require('../engine/probability');
 const { calcGoldAfter } = require('../engine/economy');
+const {
+  BUY_EXP_DENIED, canBuyExp, buyExpOnce,
+} = require('../engine/level');
 const { fail } = require('../utils/errors');
 const { loadMutable, bumpVersion } = require('./support');
 
@@ -234,6 +237,62 @@ function createShopService(ctx) {
         await dao.updatePlayer(player.id, { gold: goldAfter, level, exp }, conn);
         const version = await bumpVersion(dao, match, conn);
         return { goldBefore: player.gold, goldAfter, level, exp, leveled, version };
+      });
+    },
+
+    /**
+     * 购买经验（模块 8 口径）：消耗 buy_exp_gold 金币换取 buy_exp_amount 经验，
+     * 经验达到阈值时自动连续升级，并同步该等级的人口上限。
+     *
+     * 校验与推进全部由 engine/level.js 判定，服务层只负责事务、写库与错误映射：
+     *   - 已达 9 级 → 3009；
+     *   - 金币低于单次消耗 → 3002。
+     *
+     * @param {number} matchId 对局
+     * @param {number} playerIndex 座位
+     * @param {number} [expectedVersion] 乐观锁版本
+     * @returns {Promise<Object>} 购买结果（含升级后的完整等级态）
+     */
+    async buyExp(matchId, playerIndex, expectedVersion) {
+      const levelConfig = balance.engine.levelConfig;
+      return dao.withTransaction(async (conn) => {
+        const { match, player } = await loadMutable(dao, matchId, playerIndex, conn, expectedVersion);
+        const state = { level: Number(player.level), exp: Number(player.exp), gold: Number(player.gold) };
+
+        const check = canBuyExp(state, levelConfig);
+        if (!check.allowed) {
+          if (check.reason === BUY_EXP_DENIED.LEVEL_MAX) throw fail.levelMax(levelConfig.maxLevel);
+          throw fail.gold(levelConfig.buyExpGold, state.gold);
+        }
+
+        const result = buyExpOnce(state, levelConfig);
+        // 扣金走统一下限校验，避免出现负金币。
+        const goldAfter = calcGoldAfter(
+          { goldBefore: state.gold, incomeTotal: 0, spend: result.goldCost },
+          balance.engine.economyConfig,
+        ).goldAfter;
+
+        await dao.updatePlayer(
+          player.id,
+          { gold: goldAfter, level: result.level, exp: result.exp },
+          conn,
+        );
+        const version = await bumpVersion(dao, match, conn);
+
+        return {
+          matchId: match.id,
+          goldBefore: state.gold,
+          goldCost: result.goldCost,
+          goldAfter,
+          expGain: result.expGain,
+          level: result.level,
+          exp: result.exp,
+          nextExp: result.nextExp,
+          maxUnit: result.maxUnit,
+          expPercent: result.expPercent,
+          leveled: result.leveled,
+          version,
+        };
       });
     },
   };

@@ -162,15 +162,15 @@ INSERT INTO `card_pool_config` (`cost`, `pool_size`) VALUES
 
 -- ---------- 7. 等级配置（1~9 级）----------
 INSERT INTO `level_config` (`level`, `exp_to_next`, `max_board_slots`, `refresh_cost`) VALUES
-(1,  2, 1, 2),
-(2,  3, 2, 2),
-(3,  5, 3, 2),
+(1,  1, 1, 2),
+(2,  2, 2, 2),
+(3,  4, 3, 2),
 (4,  8, 4, 2),
-(5, 12, 5, 2),
-(6, 20, 6, 3),
+(5, 16, 5, 2),
+(6, 24, 6, 3),
 (7, 32, 7, 3),
-(8, 50, 8, 4),
-(9, 999, 9, 4);
+(8, 40, 8, 4),
+(9,  0, 9, 4);
 
 -- ---------- 8. 商店出卡概率（9 级 × 5 档，每级合计必须 = 1.0000）----------
 INSERT INTO `shop_odds_config` (`level`, `cost`, `probability`) VALUES
@@ -195,6 +195,9 @@ INSERT INTO `game_config` (`config_key`, `config_value`, `group_name`, `remark`)
 ('initial_hp',              '100', 'economy', '参与者初始血量'),
 ('streak_bonus_rules',      '[{"minStreak":2,"bonus":1},{"minStreak":4,"bonus":2},{"minStreak":6,"bonus":3}]', 'economy', '连胜/连败奖励分档，取满足的最大档且不叠加'),
 ('sell_refund_rule',        '{"1":1,"2":3,"3":9}', 'economy', '出售退款系数：星级 → 费用倍数'),
+('exp_per_round',           '1',   'economy', '每回合结算自动获得的经验'),
+('buy_exp_gold',            '5',   'economy', '购买一次经验消耗的金币'),
+('buy_exp_amount',          '4',   'economy', '购买一次获得的经验'),
 ('star_hp_multiplier',      '1.80', 'combat', '每升 1 星生命倍率'),
 ('star_attack_multiplier',  '1.80', 'combat', '每升 1 星攻击倍率'),
 ('max_star',                '3',    'combat', '最高星级'),

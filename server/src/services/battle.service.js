@@ -17,6 +17,7 @@ const {
   applyEnemySlow,
 } = require('../engine/stats');
 const { calcRoundIncome, calcGoldAfter } = require('../engine/economy');
+const { grantExp } = require('../engine/level');
 const {
   calcBattleDamage,
   applyDamage,
@@ -36,6 +37,7 @@ function createBattleService(ctx) {
   const economyConfig = balance.engine.economyConfig;
   const damageConfig = balance.engine.damageConfig;
   const statsConfig = balance.engine.statsConfig;
+  const levelConfig = balance.engine.levelConfig;
   const maxRound = balance.gameConfig.maxRound || 30;
 
   /** 由棋子 uid 找到对应的星级，用于扣血权重 */
@@ -196,10 +198,22 @@ function createBattleService(ctx) {
             economyConfig,
           ).goldAfter;
           const hp = applyDamage(player.hp, seatResult.damageToA).hpAfter;
+
+          // 回合结算自动获得经验：仅存活者成长，死于本回合的玩家不再升级。
+          // 升级所需经验与人口上限全部由 engine/level.js 按 level_config 计算。
+          const levelBefore = Number(player.level);
+          const expBefore = Number(player.exp);
+          const gainedExp = hp > 0 ? levelConfig.expPerRound : 0;
+          const expState = gainedExp > 0
+            ? grantExp({ level: levelBefore, exp: expBefore }, gainedExp, levelConfig)
+            : { level: levelBefore, exp: expBefore, leveled: 0 };
+
           const updatedPlayer = {
             ...player,
             hp,
             gold: goldAfter,
+            level: expState.level,
+            exp: expState.exp,
             win_streak: streak,
           };
           updated.push({
@@ -224,6 +238,12 @@ function createBattleService(ctx) {
             hpBefore: player.hp,
             hpAfter: hp,
             streak,
+            levelBefore,
+            levelAfter: expState.level,
+            expBefore,
+            expAfter: expState.exp,
+            expGained: gainedExp,
+            leveled: expState.leveled || 0,
           });
         }
 
@@ -243,6 +263,8 @@ function createBattleService(ctx) {
             {
               hp: player.hp,
               gold: player.gold,
+              level: player.level,
+              exp: player.exp,
               win_streak: player.win_streak,
               eliminated: player.isAlive ? 0 : 1,
               eliminated_round: player.eliminatedRound || player.eliminated_round || null,

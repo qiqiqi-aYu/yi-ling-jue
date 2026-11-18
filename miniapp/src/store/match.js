@@ -269,6 +269,19 @@ export const useMatchStore = defineStore('match', {
       });
     },
 
+    /**
+     * POST /matches/:id/buy-exp
+     * 金币消耗与经验获得量全部由后端配置决定，前端不传也不算；
+     * 购买可能触发连续升级并改变人口上限，成功后整体重拉后端状态覆盖本地。
+     */
+    buyExp() {
+      return withLoading(this, async () => {
+        const data = await shopApi.buyExp(this.currentId(), { version: this.version });
+        await this.load(this.currentId());
+        return data;
+      });
+    },
+
     /** GET /matches/:id/economy */
     loadEconomy() {
       return withLoading(this, async () => {

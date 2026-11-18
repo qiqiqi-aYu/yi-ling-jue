@@ -134,6 +134,18 @@ const contracts = [
     check: (body) => body.count === 2 && body.version === 4,
   },
   {
+    name: 'buyExp → POST /buy-exp（只传 version，金币与经验由后端决定）',
+    run: () => shopApi.buyExp(7, { version: 4 }),
+    method: 'POST',
+    url: `${base}/matches/7/buy-exp`,
+    check: (body) =>
+      body.version === 4 &&
+      Boolean(body.clientRequestId) &&
+      body.gold === undefined &&
+      body.exp === undefined &&
+      body.count === undefined,
+  },
+  {
     name: 'getEconomy → GET /economy',
     run: () => shopApi.getEconomy(7),
     method: 'GET',
@@ -263,10 +275,42 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
         },
       };
     }
+    if (method === 'POST' && url.endsWith('/buy-exp')) {
+      // 购买经验会同时改变金币、等级、所需经验与人口上限，Store 必须整体重拉
+      currentDetail = {
+        ...currentDetail,
+        version: 11,
+        me: {
+          ...currentDetail.me,
+          gold: 3,
+          level: 2,
+          exp: 0,
+          nextExp: 2,
+          expPercent: 0,
+          maxUnit: 2,
+          canBuyExp: true,
+          buyExpBlockedReason: null,
+        },
+      };
+      return {
+        data: {
+          goldBefore: 8,
+          goldCost: 5,
+          goldAfter: 3,
+          expGain: 4,
+          level: 2,
+          exp: 0,
+          nextExp: 2,
+          maxUnit: 2,
+          expPercent: 0,
+          leveled: 1,
+          version: 11,
+        },
+      };
+    }
     if (method === 'GET' && url.endsWith('/matches/7')) return { data: currentDetail };
     return { data: {} };
   });
-
   const store = useMatchStore();
 
   await store.create({ aiDifficulty: 2 });
@@ -341,6 +385,24 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
   assert.equal(store.timeline[0].value, 42);
   assert.equal(store.me.gold, 8);
   assert.equal(store.me.hp, 90);
+
+  calls.length = 0;
+  await store.buyExp();
+  // 购买经验必须先 POST 再 GET，用后端返回的完整状态覆盖本地
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['POST', 'GET'],
+  );
+  assert.equal(calls[0].url, `${base}/matches/7/buy-exp`);
+  assert.equal(calls[0].data.version, 10);
+  assert.equal(store.version, 11);
+  assert.equal(store.me.level, 2);
+  assert.equal(store.me.exp, 0);
+  assert.equal(store.me.nextExp, 2);
+  assert.equal(store.me.maxUnit, 2);
+  // 按钮可用状态完全来自后端字段，Store 只搬运不推导
+  assert.equal(store.me.canBuyExp, true);
+  assert.equal(store.me.buyExpBlockedReason, null);
 });
 
 test('Store 保留后端版本冲突错误码', async () => {

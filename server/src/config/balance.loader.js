@@ -73,6 +73,9 @@ const GAME_CONFIG_SPEC = {
   max_gold: { field: 'maxGold', type: 'int', required: true, group: 'economy' },
   streak_bonus_rules: { field: 'streakBonusRules', type: 'json', required: true, group: 'economy' },
   sell_refund_rule: { field: 'sellRefundRule', type: 'json', required: true, group: 'economy' },
+  exp_per_round: { field: 'expPerRound', type: 'int', required: true, group: 'economy' },
+  buy_exp_gold: { field: 'buyExpGold', type: 'int', required: true, group: 'economy' },
+  buy_exp_amount: { field: 'buyExpAmount', type: 'int', required: true, group: 'economy' },
   initial_hp: { field: 'initialHp', type: 'int', required: false, group: 'economy' },
   initial_gold: { field: 'initialGold', type: 'int', required: false, group: 'economy' },
   // ---- 战斗（engine/stats.js、engine/damage.js）----
@@ -379,6 +382,14 @@ function toEngineConfig(snapshot) {
       maxGold: cfg.maxGold,
       streakBonusRules: cfg.streakBonusRules,
       sellRefundRule: cfg.sellRefundRule,
+    },
+    // engine/level.js（升级经验表来自 level_config，购买参数来自 game_config）
+    levelConfig: {
+      maxLevel: snapshot.levels.list.reduce((max, row) => Math.max(max, row.level), 1),
+      expPerRound: cfg.expPerRound,
+      buyExpGold: cfg.buyExpGold,
+      buyExpAmount: cfg.buyExpAmount,
+      byLevel: snapshot.levels.byLevel,
     },
     // engine/stats.js
     statsConfig: {

@@ -15,7 +15,25 @@
         :hp="store.me.hp"
         :gold="store.me.gold"
         :level="store.me.level"
+        :exp="store.me.exp"
+        :next-exp="store.me.nextExp"
+        :exp-percent="store.me.expPercent"
       />
+
+      <view class="level-actions">
+        <button
+          class="exp-button"
+          size="mini"
+          :loading="store.loading"
+          :disabled="!store.me.canBuyExp"
+          @click="handleBuyExp"
+        >
+          购买经验
+        </button>
+        <text v-if="!store.me.canBuyExp && store.me.buyExpBlockedMessage" class="exp-tip">
+          {{ store.me.buyExpBlockedMessage }}
+        </text>
+      </view>
     </view>
 
     <view class="section">
@@ -117,6 +135,19 @@ function handleTraitSelect(trait) {
   console.log('[battle] trait select:', trait);
 }
 
+/**
+ * 购买经验：金币与经验的增减完全由后端计算。
+ * 禁用状态只读后端返回的 canBuyExp，前端不比较金币与等级。
+ */
+async function handleBuyExp() {
+  try {
+    await store.buyExp();
+    console.log('[battle] exp bought');
+  } catch (err) {
+    console.log('[battle] buy exp failed:', store.error);
+  }
+}
+
 /** 备战棋子选中只作为 UI 状态，不改动棋子或金币 */
 function handleSelectUnit(unit) {
   selectedUnit.value = unit;
@@ -198,7 +229,8 @@ function handleToggleReport() {
 
 .refresh-button,
 .battle-button,
-.report-button {
+.report-button,
+.exp-button {
   margin: 0;
   padding: 0 20rpx;
   font-size: 22rpx;
@@ -214,6 +246,29 @@ function handleToggleReport() {
 .battle-button {
   color: #d92b2b;
   border: 1rpx solid #d92b2b;
+}
+
+.level-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 16rpx;
+}
+
+.exp-button {
+  color: #c58b12;
+  border: 1rpx solid #c58b12;
+}
+
+.exp-button[disabled] {
+  color: #b8bcc4;
+  border-color: #e5e7eb;
+  background: #f7f8fa;
+}
+
+.exp-tip {
+  margin-left: 16rpx;
+  font-size: 22rpx;
+  color: #8a9099;
 }
 
 .report-button {
