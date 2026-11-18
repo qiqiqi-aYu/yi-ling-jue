@@ -80,6 +80,19 @@ const contracts = [
     check: (body) => body.version === 4 && Array.isArray(body.layout) && Boolean(body.clientRequestId),
   },
   {
+    name: 'deployHero → POST /board/deploy',
+    run: () => matchApi.deployHero(7, 50001, { location: 1, row: 2, col: 3 }, { version: 4 }),
+    method: 'POST',
+    url: `${base}/matches/7/board/deploy`,
+    check: (body) =>
+      body.instanceId === 50001 &&
+      body.location === 1 &&
+      body.row === 2 &&
+      body.col === 3 &&
+      body.version === 4 &&
+      Boolean(body.clientRequestId),
+  },
+  {
     name: 'getLatestSnapshot → GET /snapshots/latest',
     run: () => matchApi.getLatestSnapshot(7),
     method: 'GET',
@@ -158,7 +171,7 @@ for (const contract of contracts) {
   });
 }
 
-test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 战斗', async () => {
+test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 出售 → 战斗', async () => {
   setActivePinia(createPinia());
 
   const detail1 = {
@@ -175,7 +188,7 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
   };
   let currentDetail = detail1;
 
-  mockApi(({ method, url }) => {
+  mockApi(({ method, url, data }) => {
     if (method === 'POST' && url.endsWith('/matches')) {
       currentDetail = detail1;
       return { data: detail1 };
@@ -209,11 +222,31 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
       };
       return { data: { board, bench: [], version: 6 } };
     }
+    if (method === 'POST' && url.endsWith('/board/deploy')) {
+      const removing = data.location === 2;
+      const board = removing ? [] : [{ uid: data.instanceId, row: data.row, col: data.col }];
+      const bench = removing ? [{ uid: data.instanceId }] : [];
+      const version = removing ? 7 : 8;
+      currentDetail = {
+        ...currentDetail,
+        version,
+        me: { ...currentDetail.me, board, bench },
+      };
+      return { data: { board, bench, version } };
+    }
+    if (method === 'POST' && url.endsWith('/sell')) {
+      currentDetail = {
+        ...currentDetail,
+        version: 9,
+        me: { ...currentDetail.me, bench: [] },
+      };
+      return { data: { sold: { uid: 50001 }, refund: 1, version: 9 } };
+    }
     if (method === 'POST' && url.endsWith('/battle')) {
       currentDetail = {
         ...currentDetail,
         round: 2,
-        version: 7,
+        version: 10,
         me: { ...currentDetail.me, hp: 90, gold: 8 },
       };
       return {
@@ -226,7 +259,7 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
           nextRound: 2,
           matchOver: false,
           myRank: null,
-          version: 7,
+          version: 10,
         },
       };
     }
@@ -266,8 +299,43 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
   assert.equal(store.board.length, 1);
   assert.equal(store.board[0].row, 0);
 
-  await store.fightRound(1);
+  calls.length = 0;
+  await store.placeHero({ uid: 50001 }, { location: 2 });
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['POST', 'GET'],
+  );
   assert.equal(store.version, 7);
+  assert.equal(store.board.length, 0);
+  assert.equal(store.bench.length, 1);
+
+  calls.length = 0;
+  await store.placeHero({ uid: 50001 }, { location: 1, row: 2, col: 3 });
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['POST', 'GET'],
+  );
+  assert.equal(store.version, 8);
+  assert.equal(store.board.length, 1);
+  assert.equal(store.board[0].row, 2);
+  assert.equal(store.bench.length, 0);
+
+  calls.length = 0;
+  await store.sellHero(50001);
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['POST', 'GET'],
+  );
+  assert.equal(store.version, 9);
+  assert.equal(store.bench.length, 0);
+
+  calls.length = 0;
+  await store.fightRound(1);
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['POST', 'GET'],
+  );
+  assert.equal(store.version, 10);
   assert.equal(store.round, 2);
   assert.equal(store.timeline.length, 1);
   assert.equal(store.timeline[0].value, 42);

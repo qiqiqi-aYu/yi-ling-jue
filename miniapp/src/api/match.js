@@ -42,6 +42,13 @@ export function submitBoard(matchId, { layout, version } = {}) {
   return put(`/matches/${matchId}/board`, data);
 }
 
+/** POST /matches/:id/board/deploy（单棋子上阵 / 下阵 / 换位） */
+export function deployHero(matchId, instanceId, target = {}, { version } = {}) {
+  const data = { ...target, instanceId };
+  if (version !== undefined) data.version = version;
+  return post(`/matches/${matchId}/board/deploy`, data);
+}
+
 /** GET /matches/:id/snapshots/latest */
 export function getLatestSnapshot(matchId) {
   return get(`/matches/${matchId}/snapshots/latest`);

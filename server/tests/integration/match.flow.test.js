@@ -20,6 +20,7 @@ describe('P0 完整对局流程', () => {
   let token;
   let matchId;
   let version;
+  let deployedUid;
 
   beforeAll(async () => {
     services = await createServices();
@@ -94,9 +95,10 @@ describe('P0 完整对局流程', () => {
       .send({ clientRequestId: rid('buy'), slotNo: 1, version });
     expect(buy.body.code).toBe(0);
     version = buy.body.data.version;
+    deployedUid = buy.body.data.bought.uid;
 
     const layout = [
-      { instanceId: buy.body.data.bought.uid, location: 1, row: 2, col: 3 },
+      { instanceId: deployedUid, location: 1, row: 2, col: 3 },
     ];
     const board = await request(app)
       .put(`/api/v1/matches/${matchId}/board`)
@@ -105,6 +107,41 @@ describe('P0 完整对局流程', () => {
     expect(board.body.code).toBe(0);
     expect(board.body.data.board).toHaveLength(1);
     version = board.body.data.version;
+  });
+
+  test('单棋子部署接口：撤下到备战席后再上阵', async () => {
+    const uid = deployedUid;
+
+    const off = await request(app)
+      .post(`/api/v1/matches/${matchId}/board/deploy`)
+      .set(header(token))
+      .send({
+        clientRequestId: rid('deploy-off'),
+        version,
+        instanceId: uid,
+        location: 2,
+        benchIndex: 0,
+      });
+    expect(off.body.code).toBe(0);
+    expect(off.body.data.board).toHaveLength(0);
+    expect(off.body.data.bench).toHaveLength(1);
+    version = off.body.data.version;
+
+    const on = await request(app)
+      .post(`/api/v1/matches/${matchId}/board/deploy`)
+      .set(header(token))
+      .send({
+        clientRequestId: rid('deploy-on'),
+        version,
+        instanceId: uid,
+        location: 1,
+        row: 2,
+        col: 3,
+      });
+    expect(on.body.code).toBe(0);
+    expect(on.body.data.board).toHaveLength(1);
+    expect(on.body.data.bench).toHaveLength(0);
+    version = on.body.data.version;
   });
 
   test('人口上限：1 级不允许同时上阵 2 个棋子', async () => {

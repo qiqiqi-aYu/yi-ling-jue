@@ -4,6 +4,8 @@ import App from './App.vue';
 import PlayerStatus from './components/player-status/player-status.vue';
 import ShopCard from './components/shop-card/shop-card.vue';
 import SynergyPanel from './components/synergy-panel/synergy-panel.vue';
+import BoardView from './components/board-view/board-view.vue';
+import ReportPanel from './components/report-panel/report-panel.vue';
 
 /**
  * UniApp Vue3 应用入口。
@@ -16,5 +18,7 @@ export function createApp() {
   app.component('player-status', PlayerStatus);
   app.component('shop-card', ShopCard);
   app.component('synergy-panel', SynergyPanel);
+  app.component('board-view', BoardView);
+  app.component('report-panel', ReportPanel);
   return { app };
 }

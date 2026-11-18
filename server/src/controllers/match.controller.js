@@ -31,7 +31,7 @@ function createMatchController(services) {
     submitBoard: asyncHandler(async (req, res) =>
       ok(res, await boardService.submit(id(req), 0, req.body.layout, version(req)))),
     deploy: asyncHandler(async (req, res) =>
-      ok(res, await boardService.deploy(id(req), 0, req.params.instanceId, req.body, version(req)))),
+      ok(res, await boardService.deploy(id(req), 0, req.body.instanceId, req.body, version(req)))),
     traits: asyncHandler(async (req, res) => ok(res, await traitService.getTraits(id(req), 0))),
 
     snapshots: asyncHandler(async (req, res) => ok(res, await snapshotService.list(id(req)))),

@@ -46,24 +46,47 @@
     <view class="section">
       <view class="section-title">
         <text>棋盘</text>
-        <text class="section-meta">后续模块实现</text>
+        <button class="battle-button" size="mini" :loading="store.loading" @click="handleBattle">
+          发起战斗
+        </button>
       </view>
-      <view class="placeholder board-placeholder">
-        <text>棋盘可视化占位</text>
+      <board-view
+        :board="store.board"
+        :bench="store.bench"
+        :rows="store.boardMeta.boardRows"
+        :cols="store.boardMeta.boardCols"
+        :selected-unit="selectedUnit"
+        @select="handleSelectUnit"
+        @place="handlePlaceHero"
+        @remove="handleRemoveHero"
+        @sell="handleSellHero"
+      />
+    </view>
+
+    <view class="section">
+      <view class="section-title">
+        <text>战报时间轴</text>
+        <button class="report-button" size="mini" @click="handleToggleReport">
+          {{ reportOpen ? '收起' : '展开' }}
+        </button>
       </view>
+      <report-panel v-if="reportOpen" :timeline="store.timeline" />
     </view>
   </view>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { useMatchStore } from '../../store/match.js';
 
 /**
- * 对局主页面（模块 4）。
- * 只做 UI 组装、Store 状态绑定与 emit 事件打印；
- * 不调用 API，不实现购买/部署，不计算任何游戏数值。
+ * 对局主页面（模块 7）。
+ * 只做 UI 组装、Store 状态绑定与事件转发；
+ * 不在页面计算棋子位置、星级、卡池、金币或战斗结果。
  */
 const store = useMatchStore();
+const selectedUnit = ref(null);
+const reportOpen = ref(false);
 
 /** 刷新商店：只调用 Store 动作，成功后由 Store 重新拉取后端权威状态 */
 async function handleRefreshShop() {
@@ -88,6 +111,57 @@ async function handleShopSelect(hero) {
 
 function handleTraitSelect(trait) {
   console.log('[battle] trait select:', trait);
+}
+
+/** 备战棋子选中只作为 UI 状态，不改动棋子或金币 */
+function handleSelectUnit(unit) {
+  selectedUnit.value = unit;
+  console.log('[battle] unit selected:', unit && unit.uid);
+}
+
+/** 放置：目标格子由棋盘组件抛出，棋子 uid 直接使用后端返回值 */
+async function handlePlaceHero(payload) {
+  if (!payload || !payload.unit) return;
+  try {
+    await store.placeHero(payload.unit, payload.target);
+    console.log('[battle] hero placed:', payload.unit.uid);
+  } catch (err) {
+    console.log('[battle] place failed:', store.error);
+  }
+}
+
+/** 撤下：location=2 由后端决定备战席落位 */
+async function handleRemoveHero(unit) {
+  try {
+    await store.placeHero(unit, { location: 2 });
+    console.log('[battle] hero removed:', unit.uid);
+  } catch (err) {
+    console.log('[battle] remove failed:', store.error);
+  }
+}
+
+async function handleSellHero(unit) {
+  try {
+    await store.sellHero(unit.uid);
+    console.log('[battle] hero sold:', unit.uid);
+  } catch (err) {
+    console.log('[battle] sell failed:', store.error);
+  }
+}
+
+/** 发起战斗：只触发 Store 动作，战报由后端 timeline 提供 */
+async function handleBattle() {
+  try {
+    await store.fightRound(store.round);
+    console.log('[battle] round fought:', store.round);
+  } catch (err) {
+    console.log('[battle] fight failed:', store.error);
+  }
+}
+
+/** 仅控制面板展开/收起，不参与战斗计算 */
+function handleToggleReport() {
+  reportOpen.value = !reportOpen.value;
 }
 </script>
 
@@ -118,14 +192,29 @@ function handleTraitSelect(trait) {
   color: #8a9099;
 }
 
-.refresh-button {
+.refresh-button,
+.battle-button,
+.report-button {
   margin: 0;
   padding: 0 20rpx;
   font-size: 22rpx;
-  color: #2f6fed;
   background: #ffffff;
-  border: 1rpx solid #2f6fed;
   line-height: 1.8;
+}
+
+.refresh-button {
+  color: #2f6fed;
+  border: 1rpx solid #2f6fed;
+}
+
+.battle-button {
+  color: #d92b2b;
+  border: 1rpx solid #d92b2b;
+}
+
+.report-button {
+  color: #1f9d55;
+  border: 1rpx solid #1f9d55;
 }
 
 .shop-grid {

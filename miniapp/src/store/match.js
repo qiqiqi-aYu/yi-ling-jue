@@ -209,6 +209,17 @@ export const useMatchStore = defineStore('match', {
       });
     },
 
+    /** POST /matches/:id/board/deploy：上阵 / 下阵 / 换位，成功后重新拉取权威状态 */
+    placeHero(unit, target) {
+      return withLoading(this, async () => {
+        const data = await matchApi.deployHero(this.currentId(), unit.uid, target, {
+          version: this.version,
+        });
+        await this.load(this.currentId());
+        return data;
+      });
+    },
+
     /** GET /matches/:id/shop */
     loadShop() {
       return withLoading(this, async () => {
@@ -240,15 +251,13 @@ export const useMatchStore = defineStore('match', {
     },
 
     /** POST /matches/:id/heroes/:instanceId/sell */
-    async sellHero(instanceId) {
-      const data = await withLoading(this, async () => {
-        const result = await shopApi.sellHero(this.currentId(), instanceId, { version: this.version });
-        this.applyWriteResult(result);
-        return result;
+    sellHero(instanceId) {
+      return withLoading(this, async () => {
+        const data = await shopApi.sellHero(this.currentId(), instanceId, { version: this.version });
+        // 出售会同时影响金币、备战席与卡池，统一以重新拉取的后端状态为准。
+        await this.load(this.currentId());
+        return data;
       });
-      // 出售接口不回传完整布局，重新读取后端权威棋盘与备战席。
-      await this.loadBoard();
-      return data;
     },
 
     /** POST /matches/:id/level-up */
