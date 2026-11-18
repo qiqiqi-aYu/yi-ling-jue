@@ -6,6 +6,13 @@
         "navigationBarTitleText": "弈灵诀",
         "enablePullDownRefresh": false
       }
+    },
+    {
+      "path": "pages/battle/battle",
+      "style": {
+        "navigationBarTitleText": "对局",
+        "enablePullDownRefresh": false
+      }
     }
   ],
   "globalStyle": {

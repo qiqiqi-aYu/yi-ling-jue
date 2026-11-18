@@ -173,28 +173,49 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
     traits: [],
     nextRoundIncome: { base: 5, interest: 0, streak: 0, total: 5 },
   };
-  const detail2 = {
-    ...detail1,
-    round: 2,
-    version: 7,
-    me: { ...detail1.me, hp: 90, gold: 8, bench: [{ uid: 50001 }] },
-  };
+  let currentDetail = detail1;
 
   mockApi(({ method, url }) => {
-    if (method === 'POST' && url.endsWith('/matches')) return { data: detail1 };
+    if (method === 'POST' && url.endsWith('/matches')) {
+      currentDetail = detail1;
+      return { data: detail1 };
+    }
     if (method === 'POST' && url.endsWith('/shop/refresh')) {
-      return { data: { shop: [{ slotNo: 1, heroId: 5 }], goldAfter: 3, version: 4 } };
+      currentDetail = {
+        ...currentDetail,
+        version: 4,
+        me: { ...currentDetail.me, gold: 3 },
+        shop: [{ slotNo: 1, heroId: 5 }],
+      };
+      return { data: { shop: currentDetail.shop, goldAfter: 3, version: 4 } };
     }
     if (method === 'POST' && url.endsWith('/shop/buy')) {
-      return { data: { bought: { uid: 50001 }, bench: [{ uid: 50001 }], goldAfter: 2, version: 5 } };
-    }
-    if (method === 'GET' && url.endsWith('/shop')) {
-      return { data: { shop: [{ slotNo: 1, heroId: null }], level: 1 } };
+      currentDetail = {
+        ...currentDetail,
+        version: 5,
+        me: { ...currentDetail.me, gold: 2, bench: [{ uid: 50001 }] },
+        shop: [{ slotNo: 1, heroId: null }],
+      };
+      return {
+        data: { bought: { uid: 50001 }, bench: currentDetail.me.bench, goldAfter: 2, version: 5 },
+      };
     }
     if (method === 'PUT' && url.endsWith('/board')) {
-      return { data: { board: [{ uid: 50001, row: 0, col: 0 }], bench: [], version: 6 } };
+      const board = [{ uid: 50001, row: 0, col: 0 }];
+      currentDetail = {
+        ...currentDetail,
+        version: 6,
+        me: { ...currentDetail.me, board, bench: [] },
+      };
+      return { data: { board, bench: [], version: 6 } };
     }
     if (method === 'POST' && url.endsWith('/battle')) {
+      currentDetail = {
+        ...currentDetail,
+        round: 2,
+        version: 7,
+        me: { ...currentDetail.me, hp: 90, gold: 8 },
+      };
       return {
         data: {
           roundNo: 1,
@@ -209,7 +230,7 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
         },
       };
     }
-    if (method === 'GET' && url.endsWith('/matches/7')) return { data: detail2 };
+    if (method === 'GET' && url.endsWith('/matches/7')) return { data: currentDetail };
     return { data: {} };
   });
 
@@ -220,12 +241,22 @@ test('Store 只搬运后端状态：创建 → 刷新 → 购买 → 部署 → 
   assert.equal(store.version, 3);
   assert.equal(store.shop[0].heroId, 1);
 
+  calls.length = 0;
   await store.refreshShop();
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['POST', 'GET'],
+  );
   assert.equal(store.version, 4);
   assert.equal(store.me.gold, 3);
   assert.equal(store.shop[0].heroId, 5);
 
+  calls.length = 0;
   await store.buyHero(1);
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['POST', 'GET'],
+  );
   assert.equal(store.version, 5);
   assert.equal(store.me.gold, 2);
   assert.equal(store.shop[0].heroId, null);

@@ -223,21 +223,20 @@ export const useMatchStore = defineStore('match', {
     refreshShop() {
       return withLoading(this, async () => {
         const data = await shopApi.refreshShop(this.currentId(), { version: this.version });
-        this.applyWriteResult(data);
+        // 成功后重新拉取后端聚合状态覆盖本地，不在前端改写金币/商店/卡池。
+        await this.load(this.currentId());
         return data;
       });
     },
 
     /** POST /matches/:id/shop/buy */
-    async buyHero(slotNo) {
-      const data = await withLoading(this, async () => {
-        const result = await shopApi.buyHero(this.currentId(), slotNo, { version: this.version });
-        this.applyWriteResult(result);
-        return result;
+    buyHero(slotNo) {
+      return withLoading(this, async () => {
+        const data = await shopApi.buyHero(this.currentId(), slotNo, { version: this.version });
+        // 购买会同时影响金币、备战席与卡池，统一以重新拉取的后端状态为准。
+        await this.load(this.currentId());
+        return data;
       });
-      // 购买接口不回传完整商店，重新读取后端权威商店，不本地推算空槽。
-      await this.loadShop();
-      return data;
     },
 
     /** POST /matches/:id/heroes/:instanceId/sell */
