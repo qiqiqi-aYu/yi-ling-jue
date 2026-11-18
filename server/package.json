@@ -1,0 +1,46 @@
+{
+  "name": "yi-ling-jue-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "弈灵诀 · Express 后端（engine 纯函数内核 + 配置加载器 + services + P0 接口）",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "jest --runInBand",
+    "test:unit": "jest --runInBand tests/unit",
+    "test:integration": "jest --runInBand tests/integration",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage --runInBand",
+    "config:check": "node src/scripts/checkBalance.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/tests"
+    ],
+    "testMatch": [
+      "<rootDir>/tests/unit/**/*.test.js",
+      "<rootDir>/tests/integration/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "src/engine/**/*.js",
+      "src/config/**/*.js",
+      "src/services/**/*.js"
+    ]
+  }
+}

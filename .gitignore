@@ -1,0 +1,22 @@
+# 依赖与构建产物
+node_modules/
+dist/
+unpackage/
+coverage/
+
+# 环境变量（含数据库密码，禁止提交；模板见 server/.env.example）
+.env
+.env.local
+
+# 日志与系统文件
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.idea/
+.vscode/
+
+# 工作区内部记忆（非项目交付物，且可能含本机配置）
+.workbuddy/
