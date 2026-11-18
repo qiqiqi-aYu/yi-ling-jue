@@ -2,7 +2,7 @@
   <view class="page">
     <view class="card">
       <text class="title">弈灵诀 · 基础通道</text>
-      <text class="subtitle">当前仅为工程骨架与接口连通性验证，对局页面将在后续模块实现。</text>
+      <text class="subtitle">登录后可直接创建对局进入棋盘，所有数值均由后端 P0 接口返回。</text>
 
       <view class="row">
         <text class="label">接口地址</text>
@@ -20,6 +20,15 @@
       <button class="button" type="primary" :loading="loading" @click="handleLogin">
         测试玩家登录
       </button>
+      <button
+        v-if="session.isLoggedIn"
+        class="button"
+        type="primary"
+        :loading="starting"
+        @click="handleStartMatch"
+      >
+        开始对局
+      </button>
       <button class="button button-secondary" @click="handleLogout">清除本地会话</button>
 
       <text v-if="message" class="message">{{ message }}</text>
@@ -30,12 +39,15 @@
 <script setup>
 import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { getBaseUrl } from '../../api/request';
-import { useSessionStore } from '../../store/session';
+import { getBaseUrl } from '../../api/request.js';
+import { useSessionStore } from '../../store/session.js';
+import { useMatchStore } from '../../store/match.js';
 
 const session = useSessionStore();
+const matchStore = useMatchStore();
 const baseUrl = getBaseUrl();
 const loading = ref(false);
+const starting = ref(false);
 const message = ref('');
 
 onLoad(() => {
@@ -56,8 +68,36 @@ async function handleLogin() {
   }
 }
 
+/**
+ * 开始对局：建局 → 拉取商店/羁绊/棋盘 → 跳转对局页。
+ * 首页只负责按顺序调接口，棋子、金币、卡池等数值一律不在此计算。
+ */
+async function handleStartMatch() {
+  if (starting.value) return;
+  if (!session.isLoggedIn) {
+    message.value = '请先登录';
+    return;
+  }
+  starting.value = true;
+  message.value = '';
+  try {
+    await matchStore.create({});
+    await matchStore.loadShop();
+    await matchStore.loadTraits();
+    await matchStore.loadBoard();
+    message.value = `对局 #${matchStore.matchId} 已创建`;
+    uni.navigateTo({ url: '/pages/battle/battle' });
+  } catch (err) {
+    message.value = (err && err.message) || '创建对局失败';
+  } finally {
+    starting.value = false;
+  }
+}
+
 function handleLogout() {
   session.logout();
+  // 会话失效后旧对局状态一并清空，避免用旧 token 继续操作。
+  matchStore.reset();
   message.value = '本地会话已清除';
 }
 </script>

@@ -1,5 +1,9 @@
 <template>
   <view class="battle-page">
+    <view v-if="!store.hasMatch" class="placeholder">
+      <text>当前没有进行中的对局，请返回首页点击「开始对局」</text>
+    </view>
+
     <view class="section">
       <view class="section-title">
         <text>对局状态</text>

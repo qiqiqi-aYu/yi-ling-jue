@@ -174,7 +174,17 @@ describe('P0 完整对局流程', () => {
       .set(header(token))
       .send({ clientRequestId: rid('battle'), version });
     expect(res.body.code).toBe(0);
-    expect(res.body.data.battle.result).toMatch(/^(win|lose|loss|draw)$/);
+    expect(res.body.data.battle.result).toMatch(/^(win|loss|draw)$/);
+
+    // 战报必须是玩家视角：配对洗牌后真人可能落在 a/b 任一侧，
+    // 对手不得是自己，胜负口径需与结算保持一致。
+    const humanSeat = res.body.data.settlement.playerIndex;
+    if (res.body.data.battle.opponent) {
+      expect(res.body.data.battle.opponent.playerIndex).not.toBe(humanSeat);
+    }
+    expect(res.body.data.battle.mySide).toMatch(/^(A|B)$/);
+    expect(res.body.data.battle.result).toBe(res.body.data.settlement.result);
+
     expect(res.body.data.playerResults).toHaveLength(8);
     expect(res.body.data.settlement.incomeTotal).toBeGreaterThanOrEqual(5);
     expect(res.body.data.nextRound).toBe(2);

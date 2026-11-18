@@ -97,8 +97,11 @@
 - npm
 - MySQL **8.0**
 - 可执行的 MySQL 客户端
+- 微信开发者工具（仅「运行小程序」时需要，可用测试号）
 
 ### 4.2 导入数据库
+
+如果本机 `yi_ling_jue` 库已存在且数据完整（15 张表、24 个英雄），可跳过本节直接看 4.3。
 
 在项目根目录执行：
 
@@ -139,11 +142,67 @@ npm start
 npm run dev
 ```
 
-健康检查：
+健康检查（注意在根路径，不带 `/api/v1`）：
 
 ```bash
 curl http://localhost:3000/health
+# {"status":"ok","uptime":3.15}
 ```
+
+启动成功后可用一条命令确认接口真的可用：
+
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/miniapp/login \
+  -H "Content-Type: application/json" -d '{"code":"dev-openid-001"}'
+# 返回 data.token 即为可用 JWT
+```
+
+### 4.5 运行小程序
+
+小程序是 UniApp + Vue3，需单独安装依赖（与 `server/` 的依赖互不影响）。
+
+```bash
+cd miniapp
+npm install
+```
+
+**方式一：微信开发者工具（推荐，最接近真机）**
+
+```bash
+npm run dev:mp-weixin
+```
+
+命令会持续监听并输出到 `miniapp/dist/dev/mp-weixin`，然后在微信开发者工具中：
+
+1. 导入项目 → 目录选择 `miniapp/dist/dev/mp-weixin`
+2. AppID 选择「测试号」（`src/manifest.json` 的 `appid` 为空，用测试号即可）
+3. `src/manifest.json` 已设 `urlCheck: false`，因此 `localhost` 请求不会被域名校验拦截
+
+**方式二：H5 浏览器预览（最快，适合调 UI 与接口）**
+
+```bash
+npm run dev:h5
+```
+
+浏览器打开 `http://localhost:5173`。H5 下请求同源问题由浏览器处理，接口仍指向 `http://localhost:3000/api/v1`。
+
+**接口地址配置**
+
+默认地址在 `miniapp/src/api/request.js`（`http://localhost:3000/api/v1`），可用环境变量覆盖：
+
+```bash
+cd miniapp
+cp .env.example .env.local
+# 编辑 .env.local
+VITE_API_BASE_URL=http://192.168.1.100:3000/api/v1
+```
+
+- 微信开发者工具模拟器可用 `localhost`；
+- **真机预览必须改成电脑的局域网 IP**（手机访问不到 `localhost`），且电脑防火墙需放行 3000 端口。
+
+**登录说明**
+
+当前无账号体系，小程序端调用 `POST /api/v1/auth/miniapp/login` 传 `code` 即可换 JWT（开发态任意字符串），token 存在本地 Storage，后续请求自动带 `Authorization`。
 
 ---
 

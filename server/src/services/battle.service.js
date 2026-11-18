@@ -257,13 +257,27 @@ function createBattleService(ctx) {
           (report) => report.a === humanSeat.player_index || report.b === humanSeat.player_index,
         ) || pairReports[0] || {};
 
+        // 配对由洗牌产生，真人可能落在 a 侧也可能落在 b 侧。
+        // pairReports 里的 result / survivors / activeTraits 都是 a 侧视角，
+        // 这里统一折算成玩家视角，避免战报出现「对手是自己」「胜负反转」。
+        const humanIsA = humanPair.a === humanSeat.player_index;
+        const opponentSeat = humanIsA ? humanPair.b : humanPair.a;
+        // combat 返回 'lose'，对外统一用 'loss'，与 settlement.result 口径一致。
+        const normalizeResult = (result) => (result === 'lose' ? 'loss' : (result || 'draw'));
+        const flipResult = (result) => {
+          if (result === 'win') return 'loss';
+          if (result === 'loss' || result === 'lose') return 'win';
+          return 'draw';
+        };
+
         const roundResult = {
           roundNo: no,
           battle: {
-            opponent: humanPair.b !== undefined && humanPair.b !== null
-              ? { playerIndex: humanPair.b }
+            mySide: humanIsA ? 'A' : 'B',
+            opponent: opponentSeat !== undefined && opponentSeat !== null
+              ? { playerIndex: opponentSeat }
               : null,
-            result: humanPair.result || 'draw',
+            result: humanIsA ? normalizeResult(humanPair.result) : flipResult(humanPair.result),
             seed: humanPair.seed || null,
             durationSeconds: humanPair.durationSeconds || 0,
             survivors: humanPair.survivors || { A: 0, B: 0 },
@@ -272,7 +286,7 @@ function createBattleService(ctx) {
           pairs: pairReports,
           settlement: settlements.find((item) => item.playerIndex === humanSeat.player_index) || settlements[0],
           playerResults: settlements,
-          activeTraits: humanPair.activeTraitsA || [],
+          activeTraits: (humanIsA ? humanPair.activeTraitsA : humanPair.activeTraitsB) || [],
           aiActions,
         };
 
