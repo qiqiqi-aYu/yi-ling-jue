@@ -71,7 +71,6 @@ function createRoutes(services) {
   router.post('/matches/:id/shop/refresh', ...player, ...write('shop.refresh', match.refresh));
   router.post('/matches/:id/shop/buy', ...player, ...write('shop.buy', match.buy));
   router.post('/matches/:id/heroes/:instanceId/sell', ...player, ...write('hero.sell', match.sell));
-  router.post('/matches/:id/level-up', ...player, ...write('player.levelUp', match.levelUp));
   router.post('/matches/:id/buy-exp', ...player, ...write('player.buyExp', match.buyExp));
   router.get('/matches/:id/economy', ...player, match.economy);
 

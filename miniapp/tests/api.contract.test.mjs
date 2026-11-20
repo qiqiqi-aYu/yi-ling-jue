@@ -127,13 +127,6 @@ const contracts = [
     check: (body) => body.version === 4,
   },
   {
-    name: 'levelUp → POST /level-up',
-    run: () => shopApi.levelUp(7, 2, { version: 4 }),
-    method: 'POST',
-    url: `${base}/matches/7/level-up`,
-    check: (body) => body.count === 2 && body.version === 4,
-  },
-  {
     name: 'buyExp → POST /buy-exp（只传 version，金币与经验由后端决定）',
     run: () => shopApi.buyExp(7, { version: 4 }),
     method: 'POST',

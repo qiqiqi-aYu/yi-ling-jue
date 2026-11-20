@@ -24,8 +24,6 @@ function createMatchController(services) {
       ok(res, await shopService.buy(id(req), 0, req.body.slotNo, version(req)))),
     sell: asyncHandler(async (req, res) =>
       ok(res, await shopService.sell(id(req), 0, req.params.instanceId, version(req)))),
-    levelUp: asyncHandler(async (req, res) =>
-      ok(res, await shopService.levelUp(id(req), 0, req.body.count, version(req)))),
     buyExp: asyncHandler(async (req, res) =>
       ok(res, await shopService.buyExp(id(req), 0, version(req)))),
     economy: asyncHandler(async (req, res) => ok(res, await economyService.getEconomy(id(req), 0))),

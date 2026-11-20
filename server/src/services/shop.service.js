@@ -204,44 +204,7 @@ function createShopService(ctx) {
     },
 
     /**
-     * 买经验：4 金 = 4 经验，自动逐级升级。
-     * @param {number} matchId 对局
-     * @param {number} playerIndex 座位
-     * @param {number} count 购买次数
-     * @param {number} [expectedVersion] 乐观锁版本
-     * @returns {Promise<Object>} 结果
-     */
-    async levelUp(matchId, playerIndex, count, expectedVersion) {
-      const times = Number(count) || 1;
-      if (!Number.isInteger(times) || times < 1 || times > 10) throw fail.param('count 必须是 1~10 的整数');
-      return dao.withTransaction(async (conn) => {
-        const { match, player } = await loadMutable(dao, matchId, playerIndex, conn, expectedVersion);
-        const spend = times * 4;
-        if (player.gold < spend) throw fail.gold(spend, player.gold);
-
-        let level = Number(player.level);
-        let exp = Number(player.exp) + times * 4;
-        let leveled = 0;
-        while (level < 9) {
-          const need = levelById.get(level).expToNext;
-          if (exp < need) break;
-          exp -= need;
-          level += 1;
-          leveled += 1;
-        }
-        if (level === 9) exp = 0;
-        const goldAfter = calcGoldAfter(
-          { goldBefore: player.gold, incomeTotal: 0, spend },
-          balance.engine.economyConfig,
-        ).goldAfter;
-        await dao.updatePlayer(player.id, { gold: goldAfter, level, exp }, conn);
-        const version = await bumpVersion(dao, match, conn);
-        return { goldBefore: player.gold, goldAfter, level, exp, leveled, version };
-      });
-    },
-
-    /**
-     * 购买经验（模块 8 口径）：消耗 buy_exp_gold 金币换取 buy_exp_amount 经验，
+     * 购买经验：消耗 buy_exp_gold 金币换取 buy_exp_amount 经验，
      * 经验达到阈值时自动连续升级，并同步该等级的人口上限。
      *
      * 校验与推进全部由 engine/level.js 判定，服务层只负责事务、写库与错误映射：

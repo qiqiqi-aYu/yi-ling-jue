@@ -260,15 +260,6 @@ export const useMatchStore = defineStore('match', {
       });
     },
 
-    /** POST /matches/:id/level-up */
-    levelUp(count = 1) {
-      return withLoading(this, async () => {
-        const data = await shopApi.levelUp(this.currentId(), count, { version: this.version });
-        this.applyWriteResult(data);
-        return data;
-      });
-    },
-
     /**
      * POST /matches/:id/buy-exp
      * 金币消耗与经验获得量全部由后端配置决定，前端不传也不算；

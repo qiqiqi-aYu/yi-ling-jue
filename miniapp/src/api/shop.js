@@ -33,13 +33,6 @@ export function sellHero(matchId, instanceId, { version } = {}) {
   return post(`/matches/${matchId}/heroes/${instanceId}/sell`, data);
 }
 
-/** POST /matches/:id/level-up */
-export function levelUp(matchId, count = 1, { version } = {}) {
-  const data = { count };
-  if (version !== undefined) data.version = version;
-  return post(`/matches/${matchId}/level-up`, data);
-}
-
 /**
  * POST /matches/:id/buy-exp
  * 消耗与获得量由后端配置决定，前端只发请求、不传金币与经验数值。
