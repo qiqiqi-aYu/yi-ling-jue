@@ -10,7 +10,7 @@ const { createMatchCardPool } = require('../config/balance.loader');
 const { calcRoundIncome } = require('../engine/economy');
 const { levelState, canBuyExp } = require('../engine/level');
 const { assignRanks } = require('../engine/damage');
-const { streaksOf } = require('./support');
+const { streaksOf, decorateShop } = require('./support');
 const { fail } = require('../utils/errors');
 
 /** 没有 player 表，积分只做单机演示，起点固定 1000 */
@@ -136,7 +136,8 @@ function createMatchService(ctx) {
           rank: player.rank,
           unitCount: player.board.length,
         })),
-        shop: me.shop,
+        // 商店格在库里只存 slotNo/heroId/cost/locked，这里补上名称、星级、余量与羁绊名称供前端渲染
+        shop: decorateShop(me.shop, balance.engine.heroes, me.pool, balance.engine.traitMeta),
         traits: traits.list,
         nextRoundIncome: {
           base: income.base,

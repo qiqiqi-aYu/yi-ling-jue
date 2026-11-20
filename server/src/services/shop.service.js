@@ -14,7 +14,7 @@ const {
   BUY_EXP_DENIED, canBuyExp, buyExpOnce,
 } = require('../engine/level');
 const { fail } = require('../utils/errors');
-const { loadMutable, bumpVersion } = require('./support');
+const { loadMutable, bumpVersion, decorateShop } = require('./support');
 
 /**
  * @param {Object} ctx 依赖（dao / balance / heroService / makeRng）
@@ -41,11 +41,15 @@ function createShopService(ctx) {
   const writePool = (matchId, pool, conn) => dao.updateAllPlayers(matchId, { pool_json: pool }, conn);
 
   return {
-    /** 当前商店（只读） */
+    /** 当前商店（只读）：读路径补上英雄名称与星级，前端直接渲染 */
     async getShop(matchId, playerIndex) {
       const player = await dao.getPlayer(matchId, playerIndex);
       if (!player) throw fail.unit(`player:${playerIndex}`);
-      return { shop: player.shop, pool: player.pool, level: player.level };
+      return {
+        shop: decorateShop(player.shop, balance.engine.heroes, player.pool, balance.engine.traitMeta),
+        pool: player.pool,
+        level: player.level,
+      };
     },
 
     /**
@@ -107,7 +111,12 @@ function createShopService(ctx) {
       return dao.withTransaction(async (conn) => {
         const { match, player } = await loadMutable(dao, matchId, playerIndex, conn, expectedVersion);
         const result = await this.refreshCore(match, player, conn);
-        return { ...result, version: await bumpVersion(dao, match, conn) };
+        return {
+          ...result,
+          // 库里仍只存 slotNo/heroId/cost/locked，返回给前端时补上名称、星级、余量与羁绊名称
+          shop: decorateShop(result.shop, balance.engine.heroes, player.pool, balance.engine.traitMeta),
+          version: await bumpVersion(dao, match, conn),
+        };
       });
     },
 
