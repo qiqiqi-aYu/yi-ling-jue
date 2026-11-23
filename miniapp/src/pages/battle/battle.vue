@@ -62,20 +62,47 @@
           </view>
         </view>
 
-        <!-- A3 战报时间轴：收起时为侧边条；展开时由 report-open 类浮层覆盖上方两块面板 -->
+        <!--
+          A3 战报：收起时是左栏底部一条侧边条，展开时浮层覆盖上方两块面板。
+          内容为「本回合我方英雄输出排行」，由 timeline 在前端聚合，不逐条回放攻击帧。
+        -->
         <view class="panel panel-report" :class="{ 'report-open': reportOpen }">
           <view class="panel-head">
             <text class="panel-title">战报</text>
-            <text class="panel-toggle" @click="handleToggleReport">
-              {{ reportOpen ? '收起' : '展开' }}
-            </text>
+            <text class="panel-meta">本回合输出</text>
           </view>
           <view class="panel-body">
-            <report-panel v-if="reportOpen" :timeline="store.timeline" />
+            <view v-if="damageRanking.length > 0" class="dmg-list">
+              <view v-for="row in damageRanking" :key="row.uid" class="dmg-row">
+                <text class="dmg-rank" :class="{ 'dmg-rank-top': row.rank === 1 }">{{ row.rank }}</text>
+                <view class="dmg-main">
+                  <view class="dmg-line">
+                    <text class="dmg-name">{{ row.name }}</text>
+                    <text class="dmg-value">{{ row.damage }}</text>
+                  </view>
+                  <view class="dmg-track">
+                    <view class="dmg-fill" :style="{ width: row.barWidth }" />
+                  </view>
+                </view>
+              </view>
+              <view class="dmg-foot">
+                <text class="dmg-foot-label">我方总输出</text>
+                <text class="dmg-foot-value">{{ myTotalDamage }}</text>
+              </view>
+            </view>
+
             <view v-else class="panel-placeholder">
-              <text class="panel-placeholder-text">战报已收起</text>
+              <text class="panel-placeholder-text">{{ reportEmptyText }}</text>
             </view>
           </view>
+        </view>
+
+        <!--
+          展开 / 收起：同一个按钮、同一个位置，只切换文字。
+          绝对定位挂在左栏上，所以面板展开前后按钮都不会跳动。
+        -->
+        <view class="report-toggle" @click="handleToggleReport">
+          <text class="report-toggle-text">{{ reportOpen ? '收起战报' : '展开战报' }}</text>
         </view>
       </view>
 
@@ -172,18 +199,91 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useMatchStore } from '../../store/match.js';
 
 /**
  * 对局主页面（横屏改造版）。
  * 只做 UI 组装、Store 状态绑定与事件转发；
  * 不在页面计算棋子位置、星级、卡池、金币或战斗结果。
- * 本轮仅调整样式与视觉质感，事件链路与 Store / API 调用保持原样。
+ * 战报面板仅对后端返回的 timeline 做前端聚合（按英雄累加输出），
+ * 不改动事件链路，也不改动 Store / API 的调用方式。
  */
 const store = useMatchStore();
 const selectedUnit = ref(null);
 const reportOpen = ref(false);
+
+/**
+ * 战报里「造成伤害」的帧类型。
+ * 后端 timeline 的帧类型有 attack / crit / skill / dodge / kill / revive / heal，
+ * 其中只有这三种的 value 表示「对目标造成的伤害」：
+ *   - dodge 的 value 恒为 0；
+ *   - revive 的 value 是复生后的血量；
+ *   - heal 的 value 是治疗量，不是输出。
+ */
+const DAMAGE_FRAME_TYPES = ['attack', 'crit', 'skill'];
+
+/**
+ * 本回合「我方英雄输出排行」。
+ *
+ * 数据来源：后端返回的 timeline（一次战斗的逐帧记录，字段为
+ * { t, type, actor, target, value, targetHp }），这里只做按 actor 的累加，
+ * 不重放战斗、不推算未发生的伤害，也不改动任何接口。
+ *
+ * 为什么只统计我方：timeline 里的 actor 是棋子实例 ID（形如 h44_5_0df646dd），
+ * 只带座位号、不含英雄 ID，敌方棋子的 uid 在小程序侧无法反查英雄名；
+ * 我方棋子可以从 store.board / store.bench 的 uid → name 映射还原真名。
+ */
+const damageRanking = computed(() => {
+  const frames = Array.isArray(store.timeline) ? store.timeline : [];
+  if (frames.length === 0) return [];
+
+  // uid → 我方棋子（棋盘 + 备战席）：老棋子可能同英雄多份，按 heroId 合并成一行
+  const unitByUid = new Map();
+  [...(store.board || []), ...(store.bench || [])].forEach((unit) => {
+    if (unit && unit.uid) unitByUid.set(String(unit.uid), unit);
+  });
+
+  const acc = new Map();
+  frames.forEach((frame) => {
+    if (!frame || !DAMAGE_FRAME_TYPES.includes(frame.type)) return;
+    const unit = unitByUid.get(String(frame.actor || ''));
+    if (!unit) return;                               // 非我方棋子直接跳过
+    const damage = Number(frame.value) || 0;
+    if (damage <= 0) return;
+    // 同一个英雄的不同棋子合并计算；拿不到 heroId 时退回用棋子 uid 作为键
+    const key = unit.heroId === undefined || unit.heroId === null
+      ? String(unit.uid)
+      : `hero-${unit.heroId}`;
+    const prev = acc.get(key) || { key, name: unit.name || '未知棋子', damage: 0 };
+    prev.damage += damage;
+    acc.set(key, prev);
+  });
+
+  const rows = [...acc.values()].sort((a, b) => b.damage - a.damage);
+  const top = rows.length > 0 ? rows[0].damage : 0;
+  return rows.map((row, index) => {
+    const damage = Math.round(row.damage);
+    return {
+      uid: row.key,
+      name: row.name,
+      damage,
+      rank: index + 1,
+      // 条形长度按「占最高输出的比例」换算，只用于视觉对比，不参与任何战斗数值
+      barWidth: top > 0 ? `${Math.round((row.damage / top) * 100)}%` : '0%',
+    };
+  });
+});
+
+/** 排行里所有英雄的伤害合计（已按整数取整后相加，避免出现 0.30000000000000004） */
+const myTotalDamage = computed(() =>
+  damageRanking.value.reduce((sum, row) => sum + row.damage, 0));
+
+/** 空态文案：有战报但没输出 vs 还没打过 */
+const reportEmptyText = computed(() =>
+  (Array.isArray(store.timeline) && store.timeline.length > 0)
+    ? '本回合我方没有造成伤害'
+    : '发起战斗后显示本回合输出');
 
 /** 刷新商店：只调用 Store 动作，成功后由 Store 重新拉取后端权威状态 */
 async function handleRefreshShop() {
@@ -382,19 +482,36 @@ $text-sub: #8296b6;
   color: #6f82a3;
 }
 
-/* 战报【展开/收起】固定在所在区块右上角 */
-.panel-toggle {
+/*
+ * 战报【展开战报 / 收起战报】：同一个按钮、同一个位置，只换文字。
+ * 绝对定位挂在左栏上（不是挂在面板上），所以面板从「侧边条」变成
+ * 「浮层」时按钮不会跟着换位置，展开前后都在左栏底部同一处。
+ */
+.report-toggle {
   position: absolute;
-  top: 0.9vh;
-  right: 0.45vw;
-  z-index: 3;
-  padding: 0.25vh 8px;
-  font-size: 10px;
-  line-height: 1.5;
-  color: #a9d4ff;
-  background: rgba(80, 130, 210, 0.20);
-  border: 1px solid rgba(140, 190, 255, 0.38);
+  right: 0.9vw;
+  bottom: calc(#{$shop-h} + #{$gap} + 0.8vh);
+  z-index: 45;                            // 高于展开浮层(40)，保证浮层打开时仍可点击
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 66px;
+  height: 3.2vh;
+  padding: 0 10px;
+  box-sizing: border-box;
+  background: rgba(80, 130, 210, 0.22);
+  border: 1px solid rgba(140, 190, 255, 0.40);
   border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.report-toggle-text {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #a9d4ff;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
 }
 
 .panel-body {
@@ -457,9 +574,10 @@ $text-sub: #8296b6;
 
 /*
  * 战报：
- *   收起时 → 左栏底部一条侧边条，只留标题行与【展开】按钮；
+ *   收起时 → 左栏底部一条侧边条，只留标题行，右侧浮着「展开战报」按钮；
  *   展开时 → 绝对定位铺满左栏内容区（含顶部返回条以下），浮在
  *            玩家状态与羁绊之上，z-index 高于左栏内其他面板。
+ * 两种状态下按钮都由 .report-toggle 固定在同一坐标，不随面板移动。
  */
 .panel-report {
   flex: 0 0 auto;
@@ -471,6 +589,11 @@ $text-sub: #8296b6;
   margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: none;
+}
+
+/* 收起态侧边条太窄，副标题让位给右侧按钮 */
+.panel-report .panel-meta {
+  display: none;
 }
 
 .panel-report .panel-body {
@@ -499,10 +622,17 @@ $text-sub: #8296b6;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+.panel-report.report-open .panel-meta {
+  display: block;
+}
+
+/* 底部给固定的展开按钮让出 4.2vh，最后一行和合计行不会被按钮盖住 */
 .panel-report.report-open .panel-body {
   display: block;
   flex: 1;
   min-height: 0;
+  padding-bottom: 4.2vh;
+  box-sizing: border-box;
 }
 
 /* ---------------- 区域 B：中间棋盘 ---------------- */
@@ -918,58 +1048,104 @@ $text-sub: #8296b6;
   color: #5b6d8c;
 }
 
-/* ---------------- 战报面板 ---------------- */
-.panel-report :deep(.report-panel) {
-  max-height: none;
+/* ---------------- 战报：本回合我方输出排行 ---------------- */
+/* 排行是本页自己的标记，不走 :deep；子组件 report-panel 已不再参与渲染 */
+.dmg-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dmg-row {
+  display: flex;
+  align-items: center;
+  padding: 0.55vh 0;
+}
+
+.dmg-row + .dmg-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* 名次：纯文字，不发散，避免 text 节点上做背景块 */
+.dmg-rank {
+  flex: 0 0 14px;
+  width: 14px;
+  margin-right: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: #7e90ad;
+}
+
+.dmg-rank-top {
+  color: $gold-light;
+}
+
+.dmg-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.dmg-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* 英雄名过长时省略，不允许撑破左栏 */
+.dmg-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #e8eefc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dmg-value {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: $gold-light;
+}
+
+.dmg-track {
+  height: 3px;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.dmg-fill {
   height: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4a7cf0, #7fb6ff);
 }
 
-.panel-report :deep(.frame-row) {
-  padding: 5px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+.dmg-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.6vh;
+  padding-top: 0.5vh;
+  border-top: 1px solid rgba(140, 190, 255, 0.18);
 }
 
-.panel-report :deep(.frame-head) {
-  margin-bottom: 2px;
-}
-
-.panel-report :deep(.frame-body) {
-  margin-bottom: 1px;
-  font-size: 11px;
-  color: #d8e3f5;
-}
-
-.panel-report :deep(.frame-meta) {
-  gap: 8px;
+.dmg-foot-label {
   font-size: 10px;
-  color: #7e90ad;
+  color: #8ea3c4;
 }
 
-.panel-report :deep(.frame-row:last-child) {
-  border-bottom: none;
-}
-
-.panel-report :deep(.time) {
-  font-size: 10px;
-  color: #7e90ad;
-}
-
-.panel-report :deep(.type) {
-  font-size: 10px;
-  color: #7fb6ff;
-}
-
-.panel-report :deep(.arrow) {
-  color: #5f7396;
-}
-
-.panel-report :deep(.empty) {
-  padding: 16px 8px;
-  font-size: 11px;
-  color: #5b6d8c;
+.dmg-foot-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffd27a;
 }
 
 /* ---------------- 棋盘：4×7 固定网格，铺满中栏，备战席贴底 ---------------- */
