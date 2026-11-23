@@ -98,16 +98,48 @@
         </view>
 
         <!--
-          展开 / 收起：同一个按钮、同一个位置，只切换文字。
-          绝对定位挂在左栏上，所以面板展开前后按钮都不会跳动。
+          左下角常驻按钮组：升级（购买经验）+ 战报切换。
+          两个按钮都不跟商店弹窗走，商店开合时位置不动。
+          禁用原因由后端返回（canBuyExp / buyExpBlockedMessage），前端不比较金币与等级。
         -->
-        <view class="report-toggle" @click="handleToggleReport">
-          <text class="report-toggle-text">{{ reportOpen ? '收起战报' : '展开战报' }}</text>
+        <view class="left-actions">
+          <text
+            v-if="!store.me.canBuyExp && store.me.buyExpBlockedMessage"
+            class="left-actions-tip"
+          >
+            {{ store.me.buyExpBlockedMessage }}
+          </text>
+          <view class="left-actions-row">
+            <button
+              class="left-btn levelup-btn"
+              size="mini"
+              :loading="store.loading"
+              :disabled="!store.me.canBuyExp"
+              @click="handleBuyExp"
+            >
+              升级
+            </button>
+            <view class="left-btn report-toggle" @click="handleToggleReport">
+              <text class="report-toggle-text">{{ reportOpen ? '收起战报' : '展开战报' }}</text>
+            </view>
+          </view>
         </view>
       </view>
 
-      <!-- ============ 区域 B：中间棋盘（居中） ============ -->
+      <!-- ============ 区域 B：中间棋盘（居中，随商店显隐自适应） ============ -->
       <view class="center">
+        <!--
+          对手棋盘占位：只做占位容器 + 边框 + 标签，不渲染棋子、不请求对手阵容。
+          本轮为纯静态占位，为后续「观战 / 多棋盘预览」预留版位。
+        -->
+        <view class="rival-strip">
+          <view class="rival-board"><text class="rival-label">对手棋盘</text></view>
+          <view class="rival-board"><text class="rival-label">对手棋盘</text></view>
+          <view class="rival-board"><text class="rival-label">对手棋盘</text></view>
+          <view class="rival-board"><text class="rival-label">对手棋盘</text></view>
+        </view>
+
+        <!-- 我方主棋盘：占据中间主位 -->
         <view class="board-stage">
           <board-view
             class="board-host"
@@ -130,67 +162,78 @@
         </view>
       </view>
 
-      <!-- ============ 区域 C：右侧对手区（其余 7 名玩家，静态占位） ============ -->
+      <!-- ============ 区域 C：右侧 8 人对局列表（按血量降序，同血量并列） ============ -->
       <view class="rail rail-right">
-        <!-- 占位槽：暂不接入数据，仅预留 7 个版位，竖向排布 -->
-        <view class="opponent-slot"><text class="opponent-hint">玩家 2</text></view>
-        <view class="opponent-slot"><text class="opponent-hint">玩家 3</text></view>
-        <view class="opponent-slot"><text class="opponent-hint">玩家 4</text></view>
-        <view class="opponent-slot"><text class="opponent-hint">玩家 5</text></view>
-        <view class="opponent-slot"><text class="opponent-hint">玩家 6</text></view>
-        <view class="opponent-slot"><text class="opponent-hint">玩家 7</text></view>
-        <view class="opponent-slot"><text class="opponent-hint">玩家 8</text></view>
-      </view>
-
-      <!-- ============ 区域 D：底部固定通栏商店 ============ -->
-      <view class="shop-bar">
-        <!-- D1 操作按钮列 -->
-        <view class="shop-actions">
-          <button
-            class="shop-action-btn refresh-button"
-            size="mini"
-            :loading="store.loading"
-            @click="handleRefreshShop"
-          >
-            刷新商店
-          </button>
-          <button
-            class="shop-action-btn exp-button"
-            size="mini"
-            :loading="store.loading"
-            :disabled="!store.me.canBuyExp"
-            @click="handleBuyExp"
-          >
-            购买经验
-          </button>
-          <!-- 禁用原因由后端返回，前端不比较金币与等级 -->
-          <text v-if="!store.me.canBuyExp && store.me.buyExpBlockedMessage" class="exp-tip">
-            {{ store.me.buyExpBlockedMessage }}
-          </text>
+        <!--
+          固定 8 条：玩家标识 + 当前血量 + 名次。
+          数据直接来自 store.players（后端 8 人概览），排序与并列名次都在
+          playerRows 里折算，只用于展示，不回写任何状态、不调用接口。
+        -->
+        <view
+          v-for="row in playerRows"
+          :key="row.playerIndex"
+          class="player-row"
+          :class="{ 'player-row-self': row.isSelf, 'player-row-out': row.out }"
+        >
+          <text class="player-rank">{{ row.rank }}</text>
+          <text class="player-label">{{ row.label }}</text>
+          <text class="player-hp">{{ row.hpText }}</text>
         </view>
 
-        <!-- D2 商店卡片列表 -->
-        <view class="shop-list">
-          <view
-            v-for="(hero, index) in store.shop"
-            :key="index"
-            class="shop-slot"
-            :class="{ 'shop-slot-empty': !hero || !hero.heroId }"
-          >
-            <shop-card
-              class="shop-card-host"
-              :hero="hero"
-              :locked="hero.locked"
-              @select="handleShopSelect"
-            />
-            <!--
-              羁绊名称：文本直接取后端 decorateShop 返回的 traitsText（形如「灵族 · 符师」），
-              前端不做 heroId → 羁绊的映射，也不做字符串拼接；空位格没有该字段，不渲染。
-            -->
-            <text v-if="hero && hero.traitsText" class="shop-trait">{{ hero.traitsText }}</text>
+        <!-- 商店切换：风格与战报按钮统一，同一个按钮、同一个位置，只换文字 -->
+        <view class="shop-toggle" @click="handleToggleShop">
+          <text class="shop-toggle-text">{{ shopOpen ? '收起商店' : '展开商店' }}</text>
+        </view>
+      </view>
+
+      <!--
+        ============ 区域 D：商店弹窗（浮层，不占布局空间） ============
+        遮罩只覆盖中间棋盘列：左右两侧的状态栏与 8 人榜单不在遮罩内，
+        始终保持清晰可见、可读。点遮罩关闭；点弹窗本体不关闭（@click.stop）。
+        弹窗出现时底层棋盘尺寸完全不变，不做任何 padding 联动。
+      -->
+      <view v-if="shopOpen" class="shop-mask" @click="handleToggleShop">
+        <view class="shop-modal" @click.stop>
+          <view class="shop-modal-head">
+            <text class="shop-modal-title">商店</text>
+            <text class="shop-modal-hint">点击卡片买入</text>
           </view>
-          <view v-if="store.shop.length === 0" class="shop-empty">
-            <text class="shop-empty-text">当前没有商店数据</text>
+
+          <!-- 刷新只在弹窗内：弹窗关闭时按钮随之消失；升级按钮固定在左下角常驻 -->
+          <view class="shop-modal-actions">
+            <button
+              class="shop-refresh-btn"
+              size="mini"
+              :loading="store.loading"
+              @click.stop="handleRefreshShop"
+            >
+              刷新商店
+            </button>
+          </view>
+
+          <!-- 商店卡片列表：卡片样式与羁绊名称标签沿用原样 -->
+          <view class="shop-list">
+            <view
+              v-for="(hero, index) in store.shop"
+              :key="index"
+              class="shop-slot"
+              :class="{ 'shop-slot-empty': !hero || !hero.heroId }"
+            >
+              <shop-card
+                class="shop-card-host"
+                :hero="hero"
+                :locked="hero.locked"
+                @select="handleShopSelect"
+              />
+              <!--
+                羁绊名称：文本直接取后端 decorateShop 返回的 traitsText（形如「灵族 · 符师」），
+                前端不做 heroId → 羁绊的映射，也不做字符串拼接；空位格没有该字段，不渲染。
+              -->
+              <text v-if="hero && hero.traitsText" class="shop-trait">{{ hero.traitsText }}</text>
+            </view>
+            <view v-if="store.shop.length === 0" class="shop-empty">
+              <text class="shop-empty-text">当前没有商店数据</text>
+            </view>
           </view>
         </view>
       </view>
@@ -212,6 +255,12 @@ import { useMatchStore } from '../../store/match.js';
 const store = useMatchStore();
 const selectedUnit = ref(null);
 const reportOpen = ref(false);
+/*
+ * 商店浮层显隐：默认收起。
+ * 商店是浮层，出现时底层棋盘 / 榜单 / 状态栏完全不参与布局变化，
+ * 因此这个布尔只控制「弹窗渲不渲染」，不影响任何尺寸与数值。
+ */
+const shopOpen = ref(false);
 
 /**
  * 战报里「造成伤害」的帧类型。
@@ -284,6 +333,63 @@ const reportEmptyText = computed(() =>
   (Array.isArray(store.timeline) && store.timeline.length > 0)
     ? '本回合我方没有造成伤害'
     : '发起战斗后显示本回合输出');
+
+/**
+ * 右侧 8 人对局列表：名次 + 玩家标识 + 当前血量。
+ *
+ * 数据源是 store.players —— 后端详情接口返回的 8 条玩家概览，字段为
+ * { playerIndex, isAi, hp, level, eliminated, rank, unitCount }。
+ * 对局进行中后端不给 rank（库里为 NULL），所以名次在这里按血量实时折算：
+ * 血量降序，同血量并列，并列后下一个名次跳号（1、1、3）。
+ * 这只是展示排序，不参与战斗结算，也不回写 Store。
+ */
+const playerRows = computed(() => {
+  const players = Array.isArray(store.players) ? store.players : [];
+
+  // 详情还没加载回来时先占满 8 行，保证右侧栏高度不塌、布局不跳
+  if (players.length === 0) {
+    return Array.from({ length: 8 }, (_, index) => ({
+      playerIndex: index,
+      isSelf: index === 0,
+      label: index === 0 ? '我' : `AI ${index}`,
+      rank: index + 1,
+      hpText: '--',
+      out: false,
+    }));
+  }
+
+  const rows = players
+    .map((player) => {
+      const playerIndex = Number(player.playerIndex) || 0;
+      return {
+        playerIndex,
+        isSelf: playerIndex === 0,           // 座位 0 是真人，其余为 AI
+        isAi: Boolean(player.isAi),
+        hp: Number(player.hp) || 0,
+        out: Boolean(player.eliminated) || Number(player.hp) <= 0,
+      };
+    })
+    .sort((a, b) => {
+      if (b.hp !== a.hp) return b.hp - a.hp;              // 血量从高到低
+      if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1; // 同血量时自己在前，便于一眼找到
+      return a.playerIndex - b.playerIndex;                // 其余按座位号，保证顺序稳定
+    });
+
+  let rank = 0;
+  let prevHp = null;
+  return rows.map((row, index) => {
+    if (prevHp === null || row.hp !== prevHp) {
+      rank = index + 1;                       // 血量变化才更新名次，并列后自动跳号
+      prevHp = row.hp;
+    }
+    return {
+      ...row,
+      rank,
+      label: row.isSelf ? '我' : (row.isAi ? `AI ${row.playerIndex}` : `玩家 ${row.playerIndex}`),
+      hpText: String(row.hp),
+    };
+  });
+});
 
 /** 刷新商店：只调用 Store 动作，成功后由 Store 重新拉取后端权威状态 */
 async function handleRefreshShop() {
@@ -373,6 +479,11 @@ async function handleBattle() {
 function handleToggleReport() {
   reportOpen.value = !reportOpen.value;
 }
+
+/** 仅控制商店面板展开/收起，不参与任何数值与接口 */
+function handleToggleShop() {
+  shopOpen.value = !shopOpen.value;
+}
 </script>
 
 <style lang="scss" scoped>
@@ -384,7 +495,7 @@ function handleToggleReport() {
  *   2. 不新增 / 删除事件，不改 Store 与 API 调用；
  *   3. 五段子组件源码零改动，全部通过 :deep() 覆盖。
  * ============================================================ */
-$shop-h: 24vh;          // 底部商店通栏高度
+$bottom-strip: 5.4vh;   // 左下角常驻按钮组（升级 + 战报）占用的底部条带
 $gap: 1.2vh;            // 模块之间的间距
 $top-strip: 5.6vh;      // 左上角返回按钮预留的顶部条带
 $notch: 6vw;            // 左侧刘海/摄像头黑块的避让宽度（横屏时摄像头在左边缘，约 50px）
@@ -483,25 +594,88 @@ $text-sub: #8296b6;
 }
 
 /*
- * 战报【展开战报 / 收起战报】：同一个按钮、同一个位置，只换文字。
- * 绝对定位挂在左栏上（不是挂在面板上），所以面板从「侧边条」变成
- * 「浮层」时按钮不会跟着换位置，展开前后都在左栏底部同一处。
+ * 左下角常驻按钮组：升级（购买经验）+ 战报切换，横排贴左栏底部。
+ * 用绝对定位挂在左栏上，所以战报浮层开合、商店弹窗开合都不会让它移动。
  */
-.report-toggle {
+.left-actions {
   position: absolute;
-  right: 0.9vw;
-  bottom: calc(#{$shop-h} + #{$gap} + 0.8vh);
-  z-index: 45;                            // 高于展开浮层(40)，保证浮层打开时仍可点击
+  left: 0.7vw;
+  right: 0.7vw;
+  bottom: 1vh;
+  z-index: 45;                            // 高于战报浮层(40)，保证浮层打开时仍可点击
+}
+
+/* 禁用原因（金币不足 / 已满级）：贴在按钮组上方的小字，不占按钮行高度 */
+.left-actions-tip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 0.3vh);
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+  color: #ffd9a0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.left-actions-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+/* 两个按钮等宽，高度一致 */
+.left-btn {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 66px;
-  height: 3.2vh;
-  padding: 0 10px;
+  width: auto;                            // 覆盖小程序 button 默认 100% 宽度
+  min-width: 0;
+  height: 3.4vh;
+  margin: 0;
+  padding: 0 6px;
   box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* 去掉微信 button 自带 ::after 边框，避免与自定义描边叠加 */
+.left-btn::after {
+  border: none;
+}
+
+/* 升级：金色常驻，禁用时灰化（禁用原因由后端 canBuyExp 决定） */
+.levelup-btn {
+  margin-right: 0.5vw;
+  color: #2a1f0c;
+  background: linear-gradient(180deg, #e2b45c, #b8862f);
+  border: 1px solid rgba(255, 220, 150, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 2px 10px rgba(180, 130, 40, 0.22);
+}
+
+.levelup-btn[disabled] {
+  color: #9aa3b6;
+  background: rgba(66, 72, 88, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  opacity: 0.45;
+}
+
+/* 战报切换：冷色胶囊，与商店切换按钮同款 */
+.report-toggle {
+  color: #a9d4ff;
   background: rgba(80, 130, 210, 0.22);
   border: 1px solid rgba(140, 190, 255, 0.40);
-  border-radius: 999px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
@@ -554,8 +728,8 @@ $text-sub: #8296b6;
    * 只加外边距，不动内部比例 —— 玩家状态栏依旧收缩、羁绊依旧吃掉剩余高度。
    */
   margin-left: $notch;
-  // 顶部留出返回按钮的高度，避免遮挡「对局状态」标题
-  padding: $top-strip 0.7vw calc(#{$shop-h} + #{$gap});
+  // 顶部留出返回按钮的高度，避免遮挡「对局状态」标题；底部留出常驻按钮组
+  padding: $top-strip 0.7vw $bottom-strip;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -603,7 +777,7 @@ $text-sub: #8296b6;
 .panel-report.report-open {
   position: absolute;
   top: $top-strip;
-  bottom: calc(#{$shop-h} + #{$gap});
+  bottom: $bottom-strip;
   left: 0.7vw;
   right: 0.7vw;
   z-index: 40;
@@ -641,7 +815,11 @@ $text-sub: #8296b6;
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  padding: 0.8vh 0.5vw calc(#{$shop-h} + #{$gap});
+  /*
+   * 商店改成浮层后，底部不再有通栏占位，棋盘直接铺到贴近屏幕下沿。
+   * 这里只留一格间距；屏幕高度变化时棋盘尺寸只跟视口有关，不随商店开合变化。
+   */
+  padding: 0.8vh 0.5vw $gap;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -677,146 +855,241 @@ $text-sub: #8296b6;
   padding-top: 0.4vh;
 }
 
-/* ---------------- 区域 C：右侧 7 名对手（竖向） ---------------- */
+/* ---------------- 对手棋盘占位条 ---------------- */
+/*
+ * 本轮只做占位容器 + 边框 + 标签，不渲染棋子、不请求对手阵容数据。
+ * 4 个占位框横排在中栏顶部，为后续「观战 / 多棋盘预览」预留版位；
+ * 我方主棋盘仍占据下方绝大部分空间（board-stage flex:1）。
+ */
+.rival-strip {
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  gap: 0.6vw;
+  margin-bottom: 0.8vh;
+}
+
+.rival-board {
+  flex: 1;
+  min-width: 0;
+  height: 8vh;
+  box-sizing: border-box;
+  border: 1px dashed rgba(120, 160, 220, 0.22);
+  border-radius: 8px;
+  background: rgba(13, 20, 34, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rival-label {
+  font-size: 10px;
+  color: #4e617f;
+  letter-spacing: 0.5px;
+}
+
+/* ---------------- 区域 C：右侧 8 人对局列表（竖向） ---------------- */
 .rail-right {
   display: flex;
   flex-direction: column;
   flex: 0 0 14vw;
   width: 14vw;
   min-width: 0;
-  padding: $gap 0.6vw calc(#{$shop-h} + #{$gap});
   box-sizing: border-box;
   overflow: hidden;
+  // 横屏时顶部可能压到挖孔 / 状态栏，左右也可能被圆角裁切，这里统一让出安全区；
+  // 顶部留白与左栏标题对齐（$top-strip），避免两栏顶端错位
+  padding-top: calc(#{$top-strip} + env(safe-area-inset-top));
+  padding-right: calc(0.5vw + env(safe-area-inset-right));
+  padding-bottom: calc(#{$gap} + 4.4vh);  // 底部留出「展开/收起商店」按钮的高度
+  padding-left: 0.5vw;
 }
 
-.opponent-slot {
+.player-row {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  flex: 1 1 0;                            // 7 格等分剩余高度
+  flex: 1 1 0;                            // 8 条等分剩余高度，不撑高右栏
   min-height: 0;
-  margin-bottom: $gap;
-  padding: 0 0.45vw;
+  margin-bottom: 0.5vh;
+  padding: 0 0.3vw;
   box-sizing: border-box;
-  border: 1px solid rgba(120, 160, 220, 0.12);
-  border-left: 2px solid rgba(120, 170, 255, 0.30);
-  border-radius: 8px;
+  border: 1px solid rgba(120, 160, 220, 0.10);
+  border-left: 2px solid rgba(120, 170, 255, 0.26);
+  border-radius: 6px;
   background: rgba(16, 24, 40, 0.55);
 }
 
-.opponent-slot:last-child {
+.player-row:last-child {
   margin-bottom: 0;
 }
 
-.opponent-hint {
-  font-size: 11px;
-  color: #5f7396;
+/* 自己（真人）条目：提高底色亮度与左侧描边，形成高亮但不刺眼 */
+.player-row-self {
+  border-color: rgba(150, 200, 255, 0.48);
+  border-left-width: 3px;
+  border-left-color: #7fb6ff;
+  background: rgba(70, 120, 200, 0.34);
+  box-shadow: inset 0 0 12px rgba(90, 150, 240, 0.24);
 }
 
-/* ---------------- 区域 D：底部固定通栏商店 ---------------- */
-.shop-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  height: $shop-h;
-  padding: 1vh 1vw 1.2vh;                 // 底部多留一档，给卡片下方的羁绊文字带留呼吸空间
-  box-sizing: border-box;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.60);        // 半透明黑底
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+/* 已淘汰：整条淡化，血量回到 0 仍留在榜单里 */
+.player-row-out {
+  opacity: 0.45;
 }
 
-.shop-actions {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: stretch;
-  flex: 0 0 12.5vw;
-  width: 12.5vw;
-  padding-right: 0.8vw;
-  box-sizing: border-box;
-}
-
-/* ---------------- 底部按钮通用形态 ---------------- */
-.shop-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0 4px;
-  height: 7.2vh;
-  font-size: 12px;
-  line-height: 1.2;
-  box-sizing: border-box;
-  border-radius: 8px;
-}
-
-/* 去掉微信 button 自带的 ::after 边框，避免与自定义描边叠加 */
-.shop-action-btn::after {
-  border: none;
-}
-
-/* 刷新商店：冷色描边按钮 */
-.refresh-button {
-  color: #bcd8ff;
-  background: rgba(38, 48, 70, 0.85);
-  border: 1px solid rgba(120, 170, 255, 0.34);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-/*
- * 购买经验：标准金色按钮。
- * 高度固定为 8.8vh，底部留 2.8vh 内边距，用来承载禁用原因文案；
- * 文案是紧跟按钮的兄弟节点，用负外边距把它拉进按钮下沿内，
- * 从而在不改动模板结构的前提下实现「提示文字在按钮内部」。
- */
-.exp-button {
-  margin-top: 0.9vh;
-  height: 8.8vh;
-  padding: 0 4px 2.8vh;
-  font-weight: 600;
-  color: #2a1f0c;
-  background: linear-gradient(180deg, #e2b45c, #b8862f);
-  border: 1px solid rgba(255, 220, 150, 0.55);
-  border-radius: 8px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 2px 12px rgba(180, 130, 40, 0.22);
-}
-
-/* 金币不足 / 已满级：整体灰化，透明度 0.4 */
-.exp-button[disabled] {
-  color: #9aa3b6;
-  background: rgba(66, 72, 88, 0.55);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: none;
-  opacity: 0.4;
-}
-
-.exp-tip {
-  position: relative;
-  z-index: 2;
-  margin-top: -2.8vh;
-  height: 2.8vh;
-  line-height: 2.8vh;
+.player-rank {
+  flex: 0 0 auto;
+  min-width: 11px;
   font-size: 9px;
-  font-weight: 600;
-  color: #ffe6ae;
+  line-height: 1.2;
   text-align: center;
+  color: #6d80a0;                          // 名次用灰色小字，不与血量抢视线
+}
+
+.player-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 0.3vw;
+  font-size: 10px;
+  line-height: 1.2;
+  color: #b9c8e0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;                   // 文案不抢按钮点击
 }
 
-.exp-button[disabled] + .exp-tip {
-  color: #9aa3b6;
+.player-row-self .player-label {
+  font-weight: 600;
+  color: #dceaff;
+}
+
+.player-hp {
+  flex: 0 0 auto;
+  padding-left: 0.2vw;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  text-align: right;
+  color: #ff6b6b;                          // 血量红色数字
+}
+
+.player-row-self .player-hp {
+  color: #ff8a8a;
+}
+
+/*
+ * 商店【展开商店 / 收起商店】：与战报按钮同款胶囊，挂在右栏底部。
+ * 同一个按钮、同一个位置，只换文字，绑定 shopOpen 一个布尔变量。
+ */
+.shop-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  margin-top: 0.6vh;
+  height: 3.2vh;
+  box-sizing: border-box;
+  background: rgba(80, 130, 210, 0.22);
+  border: 1px solid rgba(140, 190, 255, 0.40);
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.shop-toggle-text {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #a9d4ff;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+/* ---------------- 区域 D：商店弹窗（浮层，不占布局空间） ---------------- */
+/*
+ * 遮罩只覆盖中间棋盘列：left 让开左栏（6vw 外边距 + 21vw 宽度），right 让开右栏 14vw。
+ * 所以左右两侧的状态栏与 8 人榜单不会被压暗，底层棋盘尺寸也不会因弹窗开合而变化。
+ */
+.shop-mask {
+  position: absolute;
+  left: calc(#{$notch} + 21vw);
+  right: 14vw;
+  top: 0;
+  bottom: 0;
+  z-index: 60;                            // 高于棋盘与玩家榜单
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 16, 0.62);
+}
+
+/* 弹窗本体：尺寸固定，不随内容或底层布局变化 */
+.shop-modal {
+  display: flex;
+  flex-direction: column;
+  width: 58vw;
+  height: 54vh;
+  padding: 1.2vh 0.6vw;
+  box-sizing: border-box;
+  border: 1px solid rgba(140, 190, 255, 0.26);
+  border-radius: 14px;
+  background: rgba(13, 20, 34, 0.97);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* 标题行：与战报面板的头部保持同一套视觉 */
+.shop-modal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding-bottom: 0.8vh;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.shop-modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-main;
+  letter-spacing: 0.5px;
+}
+
+.shop-modal-hint {
+  font-size: 9px;
+  color: #6d80a0;
+}
+
+.shop-modal-actions {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  padding: 0.9vh 0;
+}
+
+/* 刷新商店：只在弹窗内出现，弹窗关闭时按钮一并消失 */
+.shop-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38%;
+  height: 3.8vh;
+  margin: 0;
+  padding: 0 10px;
+  box-sizing: border-box;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: #bcd8ff;
+  background: rgba(38, 48, 70, 0.85);
+  border: 1px solid rgba(120, 170, 255, 0.34);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.shop-refresh-btn::after {
+  border: none;
 }
 
 /* ---------------- 商店卡片列表 ---------------- */
@@ -825,7 +1098,9 @@ $text-sub: #8296b6;
   flex-direction: row;
   align-items: stretch;
   flex: 1;
+  min-height: 0;
   min-width: 0;
+  padding-bottom: 0.4vh;                  // 给卡片内的羁绊文字带留一点呼吸
 }
 
 .shop-slot {
